@@ -10,6 +10,26 @@ function minutesAgo(iso: string | null): number | null {
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 }
 
+function titleFromRank(rank: number | null, cutoffs: any) {
+  if (!rank || !cutoffs) return { title: "", tier: "none" };
+
+  if (rank <= cutoffs.rank_one_cutoff) return { title: "Rank 1", tier: "rank1" };
+  if (rank <= cutoffs.gladiator_cutoff) return { title: "Gladiator", tier: "gladiator" };
+  if (rank <= cutoffs.duelist_cutoff) return { title: "Duelist", tier: "duelist" };
+  if (rank <= cutoffs.rival_cutoff) return { title: "Rival", tier: "rival" };
+  if (rank <= cutoffs.challenger_cutoff) return { title: "Challenger", tier: "challenger" };
+
+  return { title: "", tier: "none" };
+}
+
+function capRealm(value: string) {
+  if (!value) return value;
+  return value
+    .split(/[-\s]/)
+    .map((part) => part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part)
+    .join(value.includes("-") ? "-" : " ");
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const bracket = url.searchParams.get("bracket") || "3v3";
@@ -30,6 +50,12 @@ export async function GET(req: Request) {
     .eq("bracket", bracket)
     .order("last_seen_at", { ascending: false, nullsFirst: false })
     .limit(1)
+    .maybeSingle();
+
+  const { data: cutoffs } = await supabase
+    .from("title_cutoffs")
+    .select("*")
+    .eq("bracket", bracket)
     .maybeSingle();
 
   if (mode === "activity") {
@@ -65,13 +91,16 @@ export async function GET(req: Request) {
     const items = (data || []).map((x: any) => {
       const p = x.players || {};
       const activeMinutes = minutesAgo(x.detected_at);
+      const title = titleFromRank(x.rank, cutoffs);
 
       return {
         playerId: x.player_id,
         rank: x.rank,
         rankDelta: x.rank_delta || 0,
+        title: title.title,
+        titleTier: title.tier,
         name: p.name || "Unknown",
-        realm: p.realm_name || p.realm_slug || "Unknown",
+        realm: capRealm(p.realm_name || p.realm_slug || "Unknown"),
         realmSlug: p.realm_slug || "",
         faction: p.faction || "Unknown",
         race: p.race || "Unknown",
@@ -100,7 +129,7 @@ export async function GET(req: Request) {
 
     const filtered = q
       ? items.filter((p: any) =>
-          `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec}`
+          `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec} ${p.title}`
             .toLowerCase()
             .includes(q)
         )
@@ -114,6 +143,7 @@ export async function GET(req: Request) {
       totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
       mode,
       refreshedAt: latestScanRow?.last_seen_at || null,
+      cutoffs,
     });
   }
 
@@ -145,13 +175,16 @@ export async function GET(req: Request) {
   const items = (data || []).map((x: any) => {
     const p = x.players || {};
     const seenMinutes = minutesAgo(x.last_seen_at);
+    const title = titleFromRank(x.rank, cutoffs);
 
     return {
       playerId: x.player_id,
       rank: x.rank,
       rankDelta: x.rank_delta || 0,
+      title: title.title,
+      titleTier: title.tier,
       name: p.name || "Unknown",
-      realm: p.realm_name || p.realm_slug || "Unknown",
+      realm: capRealm(p.realm_name || p.realm_slug || "Unknown"),
       realmSlug: p.realm_slug || "",
       faction: p.faction || "Unknown",
       race: p.race || "Unknown",
@@ -180,7 +213,7 @@ export async function GET(req: Request) {
 
   const filtered = q
     ? items.filter((p: any) =>
-        `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec}`
+        `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec} ${p.title}`
           .toLowerCase()
           .includes(q)
       )
@@ -194,5 +227,6 @@ export async function GET(req: Request) {
     totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
     mode,
     refreshedAt: latestScanRow?.last_seen_at || null,
+    cutoffs,
   });
 }

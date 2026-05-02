@@ -33,12 +33,22 @@ function nameClass(className: string) {
   return map[className] || "text-white";
 }
 
-function formatLastDetected(ts: string | null) {
-  if (!ts) return "-";
+function shortTzName(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+  }).formatToParts(date);
+
+  return parts.find((p) => p.type === "timeZoneName")?.value || "ET";
+}
+
+function formatEstTimestamp(ts: string | null, options?: { blankIfNull?: boolean }) {
+  if (!ts) return options?.blankIfNull ? "—" : "-";
 
   const date = new Date(ts);
   const now = new Date();
   const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+  const tz = shortTzName(date);
 
   if (diffHours > 24) {
     return date.toLocaleDateString("en-US", {
@@ -48,7 +58,7 @@ function formatLastDetected(ts: string | null) {
     });
   }
 
-  return date.toLocaleString("en-US", {
+  const formatted = date.toLocaleString("en-US", {
     timeZone: "America/New_York",
     month: "numeric",
     day: "numeric",
@@ -56,13 +66,19 @@ function formatLastDetected(ts: string | null) {
     minute: "2-digit",
     hour12: true,
   });
+
+  return `${formatted} ${tz}`;
 }
 
 function RatingDelta({ value }: { value: number }) {
   if (!value) return null;
 
   return (
-    <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-black ${value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
+    <span
+      className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-black ${
+        value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
+      }`}
+    >
       {value > 0 ? `+${value}` : value}
     </span>
   );
@@ -83,11 +99,14 @@ function RecordDelta({ winsDelta, lossesDelta }: { winsDelta: number; lossesDelt
 function RankDelta({ value }: { value: number }) {
   if (!value) return null;
 
-  // rankDelta positive means the numeric rank got worse unless you later store it otherwise.
   const improved = value < 0;
 
   return (
-    <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${improved ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
+    <span
+      className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${
+        improved ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
+      }`}
+    >
       {improved ? `▲${Math.abs(value)}` : `▼${value}`}
     </span>
   );
@@ -198,7 +217,7 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
       </td>
 
       <td className="px-3 py-1.5 text-sm whitespace-nowrap text-zinc-300">
-        {formatLastDetected(player.lastDetectedAt || null)}
+        {formatEstTimestamp(player.lastDetectedAt || null, { blankIfNull: true })}
       </td>
     </tr>
   );
@@ -213,6 +232,7 @@ export default function Leaderboard() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const pageSize = 100;
 
   async function load(nextPage = page) {
@@ -234,6 +254,7 @@ export default function Leaderboard() {
     const data = await res.json();
     setPlayers(data.items || []);
     setTotalPages(data.totalPages || 1);
+    setRefreshedAt(data.refreshedAt || null);
     setLoading(false);
   }
 
@@ -262,6 +283,13 @@ export default function Leaderboard() {
 
             <p className="mt-1 text-sm text-zinc-400">
               US Season 1 {mode === "activity" ? "activity tracker" : "arena ladder"} for 2100+.
+            </p>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              Data refreshed at{" "}
+              <span className="font-semibold text-zinc-300">
+                {formatEstTimestamp(refreshedAt, { blankIfNull: true })}
+              </span>
             </p>
           </div>
 

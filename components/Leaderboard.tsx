@@ -12,21 +12,6 @@ function deltaClass(value: number) {
   return "text-zinc-300";
 }
 
-function trackedClass(minutes: number | null, mode: Mode) {
-  if (minutes === null) return "text-zinc-500";
-  if (mode === "activity" && minutes <= 5) return "text-orange-400";
-  if (mode === "activity" && minutes <= 15) return "text-green-400";
-  if (mode === "activity" && minutes <= 30) return "text-cyan-300";
-  return "text-zinc-300";
-}
-
-function statusBadge(status: string) {
-  if (status === "hot") return "🔥 HOT";
-  if (status === "active") return "ACTIVE";
-  if (status === "recent") return "RECENT";
-  return "IDLE";
-}
-
 function factionRealmClass(faction: string) {
   if (faction === "Alliance") return "text-cyan-400";
   if (faction === "Horde") return "text-red-500";
@@ -46,6 +31,66 @@ function nameClass(className: string) {
     Druid: "text-orange-300",
   };
   return map[className] || "text-white";
+}
+
+function formatLastDetected(ts: string | null) {
+  if (!ts) return "-";
+
+  const date = new Date(ts);
+  const now = new Date();
+  const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+  if (diffHours > 24) {
+    return date.toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+      month: "numeric",
+      day: "numeric",
+    });
+  }
+
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function RatingDelta({ value }: { value: number }) {
+  if (!value) return null;
+
+  return (
+    <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-black ${value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
+      {value > 0 ? `+${value}` : value}
+    </span>
+  );
+}
+
+function RecordDelta({ winsDelta, lossesDelta }: { winsDelta: number; lossesDelta: number }) {
+  if (!winsDelta && !lossesDelta) return null;
+
+  return (
+    <span className="ml-2 whitespace-nowrap text-[11px]">
+      {winsDelta > 0 && <span className="text-green-400">▲{winsDelta}W</span>}
+      {winsDelta > 0 && lossesDelta > 0 && <span className="text-zinc-600"> / </span>}
+      {lossesDelta > 0 && <span className="text-red-400">▼{lossesDelta}L</span>}
+    </span>
+  );
+}
+
+function RankDelta({ value }: { value: number }) {
+  if (!value) return null;
+
+  // rankDelta positive means the numeric rank got worse unless you later store it otherwise.
+  const improved = value < 0;
+
+  return (
+    <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${improved ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
+      {improved ? `▲${Math.abs(value)}` : `▼${value}`}
+    </span>
+  );
 }
 
 function IconBox({ src, title }: { src?: string; title: string }) {
@@ -112,11 +157,12 @@ function Pager({
 function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode }) {
   return (
     <tr className="group border-b border-zinc-900 hover:bg-zinc-900">
-      <td className="px-3 py-2 font-bold text-orange-400 whitespace-nowrap">
+      <td className="px-3 py-1.5 font-bold text-orange-400 whitespace-nowrap">
         #{player.rank ?? "-"}
+        <RankDelta value={player.rankDelta || 0} />
       </td>
 
-      <td className="px-3 py-2">
+      <td className="px-3 py-1.5">
         <div className="flex gap-1">
           <IconBox src={classIcon[player.className] || classIcon.Unknown} title={player.className} />
           <IconBox src={specIcon[player.spec] || specIcon.Unknown} title={`${player.spec} ${player.className}`} />
@@ -124,83 +170,35 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
         </div>
       </td>
 
-      <td className="px-3 py-2">
+      <td className="px-3 py-1.5">
         <div className={`text-sm font-semibold ${nameClass(player.className)}`}>{player.name}</div>
+        <div className="text-[11px] text-zinc-500">
+          {player.className !== "Unknown" || player.race !== "Unknown"
+            ? `${player.race} ${player.spec} ${player.className}`
+            : "Unknown"}
+        </div>
       </td>
 
-      <td className={`px-3 py-2 text-sm font-semibold ${factionRealmClass(player.faction)}`}>
+      <td className={`px-3 py-1.5 text-sm font-semibold ${factionRealmClass(player.faction)}`}>
         {player.realm}
       </td>
 
-      <td className="px-3 py-2 text-sm">
+      <td className="px-3 py-1.5 text-sm whitespace-nowrap">
         <span className="text-green-400">{player.wins}</span>
         <span className="text-zinc-500"> - </span>
         <span className="text-red-400">{player.losses}</span>
-      </td>
-
-      <td className="px-3 py-2 text-sm font-semibold whitespace-nowrap">
-        {player.rating}{" "}
         {mode === "activity" && (
-          <span className={deltaClass(player.ratingDelta)}>
-            {player.ratingDelta > 0 ? `+${player.ratingDelta}` : player.ratingDelta}
-          </span>
+          <RecordDelta winsDelta={player.winsDelta || 0} lossesDelta={player.lossesDelta || 0} />
         )}
       </td>
 
-      <td className={`px-3 py-2 text-sm font-semibold whitespace-nowrap ${trackedClass(player.trackedMinutesAgo, mode)}`}>
-        {player.trackedMinutesAgo === null
-          ? mode === "activity"
-            ? "no activity"
-            : "not seen"
-          : `${player.trackedMinutesAgo}m`}
+      <td className="px-3 py-1.5 text-sm font-semibold whitespace-nowrap">
+        {player.rating}
+        {mode === "activity" && <RatingDelta value={player.ratingDelta || 0} />}
       </td>
 
-      <td className="px-3 py-2 text-xs text-zinc-300 whitespace-nowrap">
-        {player.className !== "Unknown" || player.race !== "Unknown"
-          ? `${player.race} ${player.spec} ${player.className}`
-          : "Unknown"}
-      </td>
-
-      <td className="relative px-3 py-2">
-        {mode === "activity" ? (
-          <>
-            <div className="inline-flex cursor-default rounded-full border border-green-900 bg-green-950 px-2 py-1 text-[11px] text-green-300">
-              team
-            </div>
-
-            <div className="pointer-events-none absolute right-3 top-8 z-20 hidden w-72 rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-xs shadow-2xl group-hover:block">
-              <div className="mb-2 font-bold text-white">Likely queuing together</div>
-
-              <div className="space-y-1 text-zinc-300">
-                {player.team.map((name: string) => (
-                  <div key={name} className="flex items-center justify-between">
-                    <span>{name}</span>
-                    <span className="text-zinc-500">{player.bracket}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3">
-                <div>
-                  <div className="text-zinc-500">Session</div>
-                  <div className="font-bold text-white">{player.session}</div>
-                </div>
-                <div>
-                  <div className="text-zinc-500">Delta</div>
-                  <div className={deltaClass(player.ratingDelta)}>
-                    {player.ratingDelta > 0 ? `+${player.ratingDelta}` : player.ratingDelta}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-zinc-500">Conf</div>
-                  <div className="font-bold text-white">{player.teamConfidence}%</div>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <span className="text-xs text-zinc-500">—</span>
-        )}
+      <td className="px-3 py-1.5 text-sm whitespace-nowrap text-zinc-300">
+        {formatLastDetected(player.lastDetectedAt || null)}
       </td>
     </tr>
   );
@@ -242,10 +240,12 @@ export default function Leaderboard() {
   useEffect(() => {
     setPage(1);
     load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, bracket, minRating]);
 
   useEffect(() => {
     load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const shown = useMemo(() => players, [players]);
@@ -327,12 +327,14 @@ export default function Leaderboard() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-950 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-zinc-900 px-3 py-3">
+          <div className="flex items-center justify-between border-b border-zinc-900 px-3 py-2">
             <div className="font-bold">
               SHOWING {shown.length} / PAGE {page}
             </div>
             <div className="text-xs text-zinc-400">
-              {mode === "activity" ? "Activity = actual rating or W/L change" : "Ladder = current ranked list"}
+              {mode === "activity"
+                ? "Activity = rating or W/L changed in previous 12h, sorted by rating"
+                : "Ladder = current ranked list"}
             </div>
           </div>
 
@@ -346,9 +348,7 @@ export default function Leaderboard() {
                   <th className="px-3 py-2">Realm</th>
                   <th className="px-3 py-2">W/L</th>
                   <th className="px-3 py-2">Rating</th>
-                  <th className="px-3 py-2">{mode === "activity" ? "Tracked" : "Scanned"}</th>
-                  <th className="px-3 py-2">Class / Race</th>
-                  <th className="px-3 py-2">Team</th>
+                  <th className="px-3 py-2">Last Detected</th>
                 </tr>
               </thead>
 
@@ -359,7 +359,7 @@ export default function Leaderboard() {
 
                 {!loading && shown.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-5 py-10 text-center text-zinc-500">
+                    <td colSpan={7} className="px-5 py-10 text-center text-zinc-500">
                       {mode === "activity"
                         ? "No recent activity yet. Activity appears after a later poll detects rating or W/L changes."
                         : "No ladder data yet. Run the poll endpoint after setting env vars."}

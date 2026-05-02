@@ -24,6 +24,15 @@ export async function GET(req: Request) {
 
   const supabase = getSupabaseAdmin();
 
+  // Latest scan time for this bracket. This is used for "Data refreshed at".
+  const { data: latestScanRow } = await supabase
+    .from("latest_activity")
+    .select("last_seen_at")
+    .eq("bracket", bracket)
+    .order("last_seen_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
   let query = supabase
     .from("latest_activity")
     .select(
@@ -66,12 +75,13 @@ export async function GET(req: Request) {
 
     const seenMinutes = minutesAgo(x.last_seen_at);
     const activeMinutes = minutesAgo(x.last_active_at);
-    const trackedMinutes = mode === "activity" ? activeMinutes : seenMinutes;
+
+    // Last detected is ONLY actual arena activity, never a normal scan.
+    const lastDetectedAt = x.last_active_at || null;
 
     return {
       playerId: x.player_id,
       rank: x.rank,
-      // This stays 0 unless you later store previous rank. UI supports it if added.
       rankDelta: x.rank_delta || 0,
       name: p.name || "Unknown",
       realm: p.realm_name || p.realm_slug || "Unknown",
@@ -88,12 +98,12 @@ export async function GET(req: Request) {
       winsDelta: x.wins_delta || 0,
       lossesDelta: x.losses_delta || 0,
       gamesDelta: x.games_delta || 0,
-      trackedMinutesAgo: trackedMinutes,
+      trackedMinutesAgo: activeMinutes,
       activeMinutesAgo: activeMinutes,
       seenMinutesAgo: seenMinutes,
       lastSeenAt: x.last_seen_at,
       lastActiveAt: x.last_active_at,
-      lastDetectedAt: mode === "activity" ? x.last_active_at : x.last_seen_at,
+      lastDetectedAt,
       team: x.likely_team?.length ? x.likely_team : [p.name].filter(Boolean),
       teamConfidence: x.team_confidence || 0,
       session: x.session_record || "0-0",
@@ -116,5 +126,6 @@ export async function GET(req: Request) {
     pageSize,
     totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
     mode,
+    refreshedAt: latestScanRow?.last_seen_at || null,
   });
 }

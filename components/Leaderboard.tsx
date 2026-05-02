@@ -45,7 +45,6 @@ function nameClass(className: string) {
     Warlock: "text-purple-300",
     Druid: "text-orange-300",
   };
-
   return map[className] || "text-white";
 }
 
@@ -53,59 +52,93 @@ function IconBox({ src, title }: { src?: string; title: string }) {
   return (
     <span
       title={title}
-      className="block h-8 w-8 overflow-hidden rounded-md border border-zinc-700 bg-zinc-900 shadow-inner"
+      className="block h-6 w-6 overflow-hidden rounded border border-zinc-700 bg-zinc-900"
     >
       {src ? (
         <img src={src} alt={title} className="h-full w-full object-cover" />
       ) : (
-        <span className="grid h-full w-full place-items-center text-xs text-zinc-500">?</span>
+        <span className="grid h-full w-full place-items-center text-[10px] text-zinc-500">?</span>
       )}
     </span>
+  );
+}
+
+function Pager({
+  page,
+  totalPages,
+  setPage,
+}: {
+  page: number;
+  totalPages: number;
+  setPage: (p: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <button
+        onClick={() => setPage(1)}
+        disabled={page <= 1}
+        className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30"
+      >
+        {"<<"}
+      </button>
+      <button
+        onClick={() => setPage(Math.max(1, page - 1))}
+        disabled={page <= 1}
+        className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30"
+      >
+        {"<"}
+      </button>
+      <span className="px-2 font-semibold">
+        Page {page} of {totalPages}
+      </span>
+      <button
+        onClick={() => setPage(Math.min(totalPages, page + 1))}
+        disabled={page >= totalPages}
+        className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30"
+      >
+        {">"}
+      </button>
+      <button
+        onClick={() => setPage(totalPages)}
+        disabled={page >= totalPages}
+        className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30"
+      >
+        {">>"}
+      </button>
+    </div>
   );
 }
 
 function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode }) {
   return (
     <tr className="group border-b border-zinc-900 hover:bg-zinc-900">
-      <td className="px-5 py-3 font-bold text-orange-400 whitespace-nowrap">
-        #{player.rank ?? "-"}{" "}
-        <span className={deltaClass(player.rankDelta)}>
-          {player.rankDelta > 0 ? `+${player.rankDelta}` : player.rankDelta}
-        </span>
+      <td className="px-3 py-2 font-bold text-orange-400 whitespace-nowrap">
+        #{player.rank ?? "-"}
       </td>
 
-      <td className="px-5 py-3">
+      <td className="px-3 py-2">
         <div className="flex gap-1">
-          <IconBox src={raceIcon[player.race] || raceIcon.Unknown} title={player.race} />
           <IconBox src={classIcon[player.className] || classIcon.Unknown} title={player.className} />
-          <IconBox
-            src={specIcon[player.spec] || specIcon.Unknown}
-            title={`${player.spec} ${player.className}`}
-          />
+          <IconBox src={specIcon[player.spec] || specIcon.Unknown} title={`${player.spec} ${player.className}`} />
+          <IconBox src={raceIcon[player.race] || raceIcon.Unknown} title={player.race} />
         </div>
       </td>
 
-      <td className="px-5 py-3">
-        <div className={`font-semibold ${nameClass(player.className)}`}>{player.name}</div>
-        <div className="text-xs text-zinc-500">
-          {player.race} {player.spec} {player.className}
-        </div>
+      <td className="px-3 py-2">
+        <div className={`text-sm font-semibold ${nameClass(player.className)}`}>{player.name}</div>
       </td>
 
-      <td className={`px-5 py-3 font-semibold ${factionRealmClass(player.faction)}`}>
+      <td className={`px-3 py-2 text-sm font-semibold ${factionRealmClass(player.faction)}`}>
         {player.realm}
       </td>
 
-      <td className="px-5 py-3 whitespace-nowrap">
+      <td className="px-3 py-2 text-sm">
         <span className="text-green-400">{player.wins}</span>
-        <span className="text-zinc-500"> / </span>
+        <span className="text-zinc-500"> - </span>
         <span className="text-red-400">{player.losses}</span>
-        {mode === "activity" && player.gamesDelta > 0 && (
-          <span className="ml-2 text-xs text-zinc-500">+{player.gamesDelta}g</span>
-        )}
       </td>
 
-      <td className="px-5 py-3 font-semibold whitespace-nowrap">
+      <td className="px-3 py-2 text-sm font-semibold whitespace-nowrap">
         {player.rating}{" "}
         {mode === "activity" && (
           <span className={deltaClass(player.ratingDelta)}>
@@ -114,32 +147,28 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
         )}
       </td>
 
-      <td className={`px-5 py-3 font-semibold whitespace-nowrap ${trackedClass(player.trackedMinutesAgo, mode)}`}>
-        <div>
-          {player.trackedMinutesAgo === null
-            ? mode === "activity"
-              ? "no activity"
-              : "not seen"
-            : `${player.trackedMinutesAgo} minutes ago`}
-        </div>
-
-        {mode === "activity" ? (
-          <div className="text-xs uppercase tracking-wide text-zinc-500">
-            {statusBadge(player.activityStatus)}
-          </div>
-        ) : (
-          <div className="text-xs uppercase tracking-wide text-zinc-500">LAST SCANNED</div>
-        )}
+      <td className={`px-3 py-2 text-sm font-semibold whitespace-nowrap ${trackedClass(player.trackedMinutesAgo, mode)}`}>
+        {player.trackedMinutesAgo === null
+          ? mode === "activity"
+            ? "no activity"
+            : "not seen"
+          : `${player.trackedMinutesAgo}m`}
       </td>
 
-      <td className="relative px-5 py-3">
+      <td className="px-3 py-2 text-xs text-zinc-300 whitespace-nowrap">
+        {player.className !== "Unknown" || player.race !== "Unknown"
+          ? `${player.race} ${player.spec} ${player.className}`
+          : "Unknown"}
+      </td>
+
+      <td className="relative px-3 py-2">
         {mode === "activity" ? (
           <>
-            <div className="inline-flex cursor-default items-center gap-2 rounded-full border border-green-900 bg-green-950 px-3 py-1 text-xs text-green-300">
-              likely team
+            <div className="inline-flex cursor-default rounded-full border border-green-900 bg-green-950 px-2 py-1 text-[11px] text-green-300">
+              team
             </div>
 
-            <div className="pointer-events-none absolute right-5 top-10 z-20 hidden w-80 rounded-2xl border border-zinc-700 bg-zinc-950 p-4 text-sm shadow-2xl group-hover:block">
+            <div className="pointer-events-none absolute right-3 top-8 z-20 hidden w-72 rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-xs shadow-2xl group-hover:block">
               <div className="mb-2 font-bold text-white">Likely queuing together</div>
 
               <div className="space-y-1 text-zinc-300">
@@ -151,21 +180,19 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
                 ))}
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3 text-xs">
-                <div className="rounded-xl bg-zinc-900 p-2">
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3">
+                <div>
                   <div className="text-zinc-500">Session</div>
                   <div className="font-bold text-white">{player.session}</div>
                 </div>
-
-                <div className="rounded-xl bg-zinc-900 p-2">
+                <div>
                   <div className="text-zinc-500">Delta</div>
                   <div className={deltaClass(player.ratingDelta)}>
                     {player.ratingDelta > 0 ? `+${player.ratingDelta}` : player.ratingDelta}
                   </div>
                 </div>
-
-                <div className="rounded-xl bg-zinc-900 p-2">
-                  <div className="text-zinc-500">Confidence</div>
+                <div>
+                  <div className="text-zinc-500">Conf</div>
                   <div className="font-bold text-white">{player.teamConfidence}%</div>
                 </div>
               </div>
@@ -186,8 +213,11 @@ export default function Leaderboard() {
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState<(ActivityPlayer & any)[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 100;
 
-  async function load() {
+  async function load(nextPage = page) {
     setLoading(true);
 
     const params = new URLSearchParams({
@@ -195,6 +225,8 @@ export default function Leaderboard() {
       mode,
       minRating: String(minRating),
       q: query,
+      page: String(nextPage),
+      pageSize: String(pageSize),
     });
 
     const res = await fetch(`/api/activity?${params.toString()}`, {
@@ -203,59 +235,50 @@ export default function Leaderboard() {
 
     const data = await res.json();
     setPlayers(data.items || []);
+    setTotalPages(data.totalPages || 1);
     setLoading(false);
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 60000);
-    return () => clearInterval(id);
+    setPage(1);
+    load(1);
   }, [mode, bracket, minRating]);
 
-  const shown = useMemo(() => {
-    if (!query) return players;
+  useEffect(() => {
+    load(page);
+  }, [page]);
 
-    const q = query.toLowerCase();
-
-    return players.filter((p) =>
-      `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec}`
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [players, query]);
-
-  const hot = shown.filter((p) => p.activityStatus === "hot").length;
-  const active = shown.filter((p) => p.activityStatus === "active").length + hot;
+  const shown = useMemo(() => players, [players]);
 
   return (
-    <div className="min-h-screen bg-black p-6 text-zinc-100">
+    <div className="min-h-screen bg-black p-4 text-zinc-100">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight">
+            <h1 className="text-3xl font-black tracking-tight">
               <span className="text-orange-500">TBC CLASSIC ANNIVERSARY</span>{" "}
               {mode === "activity" ? "ACTIVITY" : "LADDER"}
             </h1>
 
-            <p className="mt-2 text-sm text-zinc-400">
-              US Season 1 {mode === "activity" ? "activity tracker" : "arena ladder"} for 2100+ 2v2, 3v3, and 5v5.
+            <p className="mt-1 text-sm text-zinc-400">
+              US Season 1 {mode === "activity" ? "activity tracker" : "arena ladder"} for 2100+.
             </p>
           </div>
 
           <button
-            onClick={load}
-            className="rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-900"
+            onClick={() => load(page)}
+            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
         </header>
 
-        <div className="mb-5 grid grid-cols-2 gap-3">
+        <div className="mb-3 grid grid-cols-2 gap-2">
           {(["ladder", "activity"] as Mode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-md px-4 py-4 text-xl font-black uppercase transition ${
+              className={`rounded px-4 py-3 text-lg font-black uppercase transition ${
                 mode === m
                   ? "bg-orange-600 text-white"
                   : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
@@ -266,78 +289,66 @@ export default function Leaderboard() {
           ))}
         </div>
 
-        {mode === "activity" && (
-          <div className="mb-4 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
-              <div className="text-xs uppercase text-zinc-500">Hot last 5 min</div>
-              <div className="text-2xl font-black text-orange-400">{hot}</div>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
-              <div className="text-xs uppercase text-zinc-500">Active last 15 min</div>
-              <div className="text-2xl font-black text-green-400">{active}</div>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
-              <div className="text-xs uppercase text-zinc-500">Showing</div>
-              <div className="text-2xl font-black text-white">{shown.length}</div>
-            </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="grid flex-1 grid-cols-3 gap-2">
+            {(["2v2", "3v3", "5v5"] as Bracket[]).map((b) => (
+              <button
+                key={b}
+                onClick={() => setBracket(b)}
+                className={`rounded px-4 py-2 text-base font-black transition ${
+                  bracket === b
+                    ? "bg-green-800 text-white"
+                    : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                }`}
+              >
+                {b}
+              </button>
+            ))}
           </div>
-        )}
 
-        <div className="mb-5 grid grid-cols-3 gap-3 border-b border-green-800 pb-5">
-          {(["2v2", "3v3", "5v5"] as Bracket[]).map((b) => (
-            <button
-              key={b}
-              onClick={() => setBracket(b)}
-              className={`rounded-md px-4 py-3 text-lg font-black transition ${
-                bracket === b
-                  ? "bg-green-800 text-white"
-                  : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-              }`}
-            >
-              {b}
-            </button>
-          ))}
+          <Pager page={page} totalPages={totalPages} setPage={setPage} />
         </div>
 
-        <div className="mb-5 grid gap-3 md:grid-cols-3">
+        <div className="mb-3 grid gap-2 md:grid-cols-[1fr_140px]">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load()}
+            onKeyDown={(e) => e.key === "Enter" && load(1)}
             placeholder="Search player, realm, race, class, spec..."
-            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700 md:col-span-2"
+            className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-green-700"
           />
 
           <input
             type="number"
             value={minRating}
             onChange={(e) => setMinRating(Number(e.target.value) || 0)}
-            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700"
+            className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-green-700"
           />
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-zinc-900 bg-zinc-950 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-zinc-900 px-5 py-4">
-            <div className="font-bold">SHOWING {shown.length}</div>
-            <div className="text-sm text-zinc-400">
+        <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-950 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-zinc-900 px-3 py-3">
+            <div className="font-bold">
+              SHOWING {shown.length} / PAGE {page}
+            </div>
+            <div className="text-xs text-zinc-400">
               {mode === "activity" ? "Activity = actual rating or W/L change" : "Ladder = current ranked list"}
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-black text-xs uppercase text-zinc-500">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-black text-[11px] uppercase text-zinc-500">
                 <tr>
-                  <th className="px-5 py-3">Rank</th>
-                  <th className="px-5 py-3">Details</th>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Realm</th>
-                  <th className="px-5 py-3">Won / Lost</th>
-                  <th className="px-5 py-3">Rating</th>
-                  <th className="px-5 py-3">{mode === "activity" ? "Tracked" : "Scanned"}</th>
-                  <th className="px-5 py-3">Team</th>
+                  <th className="px-3 py-2">Rank</th>
+                  <th className="px-3 py-2">Icons</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Realm</th>
+                  <th className="px-3 py-2">W/L</th>
+                  <th className="px-3 py-2">Rating</th>
+                  <th className="px-3 py-2">{mode === "activity" ? "Tracked" : "Scanned"}</th>
+                  <th className="px-3 py-2">Class / Race</th>
+                  <th className="px-3 py-2">Team</th>
                 </tr>
               </thead>
 
@@ -348,7 +359,7 @@ export default function Leaderboard() {
 
                 {!loading && shown.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-zinc-500">
+                    <td colSpan={9} className="px-5 py-10 text-center text-zinc-500">
                       {mode === "activity"
                         ? "No recent activity yet. Activity appears after a later poll detects rating or W/L changes."
                         : "No ladder data yet. Run the poll endpoint after setting env vars."}
@@ -360,8 +371,8 @@ export default function Leaderboard() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-zinc-900 bg-zinc-950 p-5 text-sm text-zinc-400">
-          Ladder shows the current Blizzard API ladder. Activity only shows players who had a rating, win, or loss change after a poll.
+        <div className="mt-3 flex justify-center">
+          <Pager page={page} totalPages={totalPages} setPage={setPage} />
         </div>
       </div>
     </div>

@@ -46,14 +46,16 @@ export async function GET(req: Request) {
     .gte("rating", minRating);
 
   if (mode === "activity") {
-    // Activity means an actual detected change, not just scanned.
-    query = query
-      .not("last_active_at", "is", null)
-      .gt("games_delta", 0)
-      .order("last_active_at", { ascending: false, nullsFirst: false });
-  } else {
-    query = query.order("rating", { ascending: false });
-  }
+  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+
+  query = query
+    .not("last_active_at", "is", null)
+    .gte("last_active_at", twelveHoursAgo)
+    .order("rating", { ascending: false })
+    .order("last_active_at", { ascending: false, nullsFirst: false });
+} else {
+  query = query.order("rating", { ascending: false });
+}
 
   const { data, error, count } = await query.range(from, to);
 

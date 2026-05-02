@@ -1,12 +1,369 @@
 "use client";
-import {useEffect,useMemo,useState} from "react";
-import {classIcon,raceIcon,specIcon} from "@/lib/icons";
-import type {ActivityPlayer,Bracket} from "@/lib/types";
-function deltaClass(v:number){if(v>0)return"text-green-400";if(v<0)return"text-red-500";return"text-zinc-300";}
-function trackedClass(m:number|null){if(m===null)return"text-zinc-500";if(m<=5)return"text-orange-400";if(m<=15)return"text-green-400";if(m<=30)return"text-cyan-300";return"text-zinc-300";}
-function statusBadge(s:string){if(s==="hot")return"🔥 hot";if(s==="active")return"active";if(s==="recent")return"recent";return"seen";}
-function factionRealmClass(f:string){if(f==="Alliance")return"text-cyan-400";if(f==="Horde")return"text-red-500";return"text-zinc-300";}
-function nameClass(c:string){return({Warrior:"text-yellow-300",Paladin:"text-pink-300",Hunter:"text-lime-300",Rogue:"text-yellow-200",Priest:"text-white",Shaman:"text-blue-300",Mage:"text-cyan-300",Warlock:"text-purple-300",Druid:"text-orange-300"} as any)[c]||"text-white";}
-function IconBox({src,title}:{src?:string;title:string}){return <span title={title} className="block h-8 w-8 overflow-hidden rounded-md border border-zinc-700 bg-zinc-900 shadow-inner">{src?<img src={src} alt={title} className="h-full w-full object-cover"/>:<span className="grid h-full w-full place-items-center text-xs text-zinc-500">?</span>}</span>;}
-function PlayerRow({player}:{player:ActivityPlayer}){return <tr className="group border-b border-zinc-900 hover:bg-zinc-900"><td className="px-5 py-3 font-bold text-orange-400 whitespace-nowrap">#{player.rank??"-"} <span className={deltaClass(player.rankDelta)}>{player.rankDelta>0?`+${player.rankDelta}`:player.rankDelta}</span></td><td className="px-5 py-3"><div className="flex gap-1"><IconBox src={raceIcon[player.race]||raceIcon.Unknown} title={player.race}/><IconBox src={classIcon[player.className]||classIcon.Unknown} title={player.className}/><IconBox src={specIcon[player.spec]||specIcon.Unknown} title={`${player.spec} ${player.className}`}/></div></td><td className="px-5 py-3"><div className={`font-semibold ${nameClass(player.className)}`}>{player.name}</div><div className="text-xs text-zinc-500">{player.race} {player.spec} {player.className}</div></td><td className={`px-5 py-3 font-semibold ${factionRealmClass(player.faction)}`}>{player.realm}</td><td className="px-5 py-3 whitespace-nowrap"><span className="text-green-400">{player.wins}</span><span className="text-zinc-500"> / </span><span className="text-red-400">{player.losses}</span>{player.gamesDelta>0&&<span className="ml-2 text-xs text-zinc-500">+{player.gamesDelta}g</span>}</td><td className="px-5 py-3 font-semibold whitespace-nowrap">{player.rating} <span className={deltaClass(player.ratingDelta)}>{player.ratingDelta>0?`+${player.ratingDelta}`:player.ratingDelta}</span></td><td className={`px-5 py-3 font-semibold whitespace-nowrap ${trackedClass(player.trackedMinutesAgo)}`}><div>{player.trackedMinutesAgo===null?"not active":`${player.trackedMinutesAgo} minutes ago`}</div><div className="text-xs uppercase tracking-wide text-zinc-500">{statusBadge(player.activityStatus)}</div></td><td className="relative px-5 py-3"><div className="inline-flex cursor-default items-center gap-2 rounded-full border border-green-900 bg-green-950 px-3 py-1 text-xs text-green-300">likely team</div><div className="pointer-events-none absolute right-5 top-10 z-20 hidden w-80 rounded-2xl border border-zinc-700 bg-zinc-950 p-4 text-sm shadow-2xl group-hover:block"><div className="mb-2 font-bold text-white">Likely queuing together</div><div className="space-y-1 text-zinc-300">{player.team.map(name=><div key={name} className="flex items-center justify-between"><span>{name}</span><span className="text-zinc-500">{player.bracket}</span></div>)}</div><div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3 text-xs"><div className="rounded-xl bg-zinc-900 p-2"><div className="text-zinc-500">Session</div><div className="font-bold text-white">{player.session}</div></div><div className="rounded-xl bg-zinc-900 p-2"><div className="text-zinc-500">Delta</div><div className={deltaClass(player.ratingDelta)}>{player.ratingDelta>0?`+${player.ratingDelta}`:player.ratingDelta}</div></div><div className="rounded-xl bg-zinc-900 p-2"><div className="text-zinc-500">Confidence</div><div className="font-bold text-white">{player.teamConfidence}%</div></div></div></div></td></tr>;}
-export default function Leaderboard(){const[bracket,setBracket]=useState<Bracket>("3v3");const[minRating,setMinRating]=useState(2100);const[query,setQuery]=useState("");const[players,setPlayers]=useState<ActivityPlayer[]>([]);const[loading,setLoading]=useState(false);async function load(){setLoading(true);const params=new URLSearchParams({bracket,minRating:String(minRating),q:query});const res=await fetch(`/api/activity?${params}`,{cache:"no-store"});const data=await res.json();setPlayers(data.items||[]);setLoading(false);}useEffect(()=>{load();const id=setInterval(load,60000);return()=>clearInterval(id);},[bracket,minRating]);const shown=useMemo(()=>{if(!query)return players;const q=query.toLowerCase();return players.filter(p=>`${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec}`.toLowerCase().includes(q));},[players,query]);const hot=shown.filter(p=>p.activityStatus==="hot").length;const active=shown.filter(p=>p.activityStatus==="active").length+hot;return <div className="min-h-screen bg-black p-6 text-zinc-100"><div className="mx-auto max-w-7xl"><header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><h1 className="text-4xl font-black tracking-tight"><span className="text-orange-500">TBC CLASSIC ANNIVERSARY</span> ACTIVITY</h1><p className="mt-2 text-sm text-zinc-400">US Season 1 activity tracker for 2100+ 3v3 and 5v5 ladders.</p></div><button onClick={load} className="rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-900">{loading?"Refreshing...":"Refresh"}</button></header><div className="mb-4 grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4"><div className="text-xs uppercase text-zinc-500">Hot last 5 min</div><div className="text-2xl font-black text-orange-400">{hot}</div></div><div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4"><div className="text-xs uppercase text-zinc-500">Active last 15 min</div><div className="text-2xl font-black text-green-400">{active}</div></div><div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4"><div className="text-xs uppercase text-zinc-500">Showing</div><div className="text-2xl font-black text-white">{shown.length}</div></div></div><div className="mb-5 grid grid-cols-3 gap-3 border-b border-green-800 pb-5">{(["2v2","3v3","5v5"] as Bracket[]).map(b=><button key={b} onClick={()=>setBracket(b)} className={`rounded-md px-4 py-3 text-lg font-black transition ${bracket===b?"bg-green-800 text-white":"bg-zinc-900 text-zinc-300 hover:bg-zinc-800"}`}>{b}</button>)}</div><div className="mb-5 grid gap-3 md:grid-cols-3"><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&load()} placeholder="Search player, realm, race, class, spec..." className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700 md:col-span-2"/><input type="number" value={minRating} onChange={e=>setMinRating(Number(e.target.value)||0)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700"/></div><div className="overflow-hidden rounded-2xl border border-zinc-900 bg-zinc-950 shadow-2xl"><div className="flex items-center justify-between border-b border-zinc-900 px-5 py-4"><div className="font-bold">SHOWING {shown.length}</div><div className="text-sm text-zinc-400">Details = Race / Class / Spec</div></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-black text-xs uppercase text-zinc-500"><tr><th className="px-5 py-3">Rank</th><th className="px-5 py-3">Details</th><th className="px-5 py-3">Name</th><th className="px-5 py-3">Realm</th><th className="px-5 py-3">Won / Lost</th><th className="px-5 py-3">Rating</th><th className="px-5 py-3">Tracked</th><th className="px-5 py-3">Team</th></tr></thead><tbody>{shown.map(p=><PlayerRow key={p.bracket+p.playerId} player={p}/>)}{!loading&&shown.length===0&&<tr><td colSpan={8} className="px-5 py-10 text-center text-zinc-500">No data yet. Run the poll endpoint after setting env vars and season id.</td></tr>}</tbody></table></div></div><div className="mt-6 rounded-2xl border border-zinc-900 bg-zinc-950 p-5 text-sm text-zinc-400">Hot means changed within 5 minutes. Active means changed within 15 minutes. This detects recent ladder activity, not literal live queue state.</div></div></div>;}
+
+import { useEffect, useMemo, useState } from "react";
+import { classIcon, raceIcon, specIcon } from "@/lib/icons";
+import type { ActivityPlayer, Bracket } from "@/lib/types";
+
+type Mode = "ladder" | "activity";
+
+function deltaClass(value: number) {
+  if (value > 0) return "text-green-400";
+  if (value < 0) return "text-red-500";
+  return "text-zinc-300";
+}
+
+function trackedClass(minutes: number | null, mode: Mode) {
+  if (minutes === null) return "text-zinc-500";
+  if (mode === "activity" && minutes <= 5) return "text-orange-400";
+  if (mode === "activity" && minutes <= 15) return "text-green-400";
+  if (mode === "activity" && minutes <= 30) return "text-cyan-300";
+  return "text-zinc-300";
+}
+
+function statusBadge(status: string) {
+  if (status === "hot") return "🔥 HOT";
+  if (status === "active") return "ACTIVE";
+  if (status === "recent") return "RECENT";
+  return "IDLE";
+}
+
+function factionRealmClass(faction: string) {
+  if (faction === "Alliance") return "text-cyan-400";
+  if (faction === "Horde") return "text-red-500";
+  return "text-zinc-300";
+}
+
+function nameClass(className: string) {
+  const map: Record<string, string> = {
+    Warrior: "text-yellow-300",
+    Paladin: "text-pink-300",
+    Hunter: "text-lime-300",
+    Rogue: "text-yellow-200",
+    Priest: "text-white",
+    Shaman: "text-blue-300",
+    Mage: "text-cyan-300",
+    Warlock: "text-purple-300",
+    Druid: "text-orange-300",
+  };
+
+  return map[className] || "text-white";
+}
+
+function IconBox({ src, title }: { src?: string; title: string }) {
+  return (
+    <span
+      title={title}
+      className="block h-8 w-8 overflow-hidden rounded-md border border-zinc-700 bg-zinc-900 shadow-inner"
+    >
+      {src ? (
+        <img src={src} alt={title} className="h-full w-full object-cover" />
+      ) : (
+        <span className="grid h-full w-full place-items-center text-xs text-zinc-500">?</span>
+      )}
+    </span>
+  );
+}
+
+function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode }) {
+  return (
+    <tr className="group border-b border-zinc-900 hover:bg-zinc-900">
+      <td className="px-5 py-3 font-bold text-orange-400 whitespace-nowrap">
+        #{player.rank ?? "-"}{" "}
+        <span className={deltaClass(player.rankDelta)}>
+          {player.rankDelta > 0 ? `+${player.rankDelta}` : player.rankDelta}
+        </span>
+      </td>
+
+      <td className="px-5 py-3">
+        <div className="flex gap-1">
+          <IconBox src={raceIcon[player.race] || raceIcon.Unknown} title={player.race} />
+          <IconBox src={classIcon[player.className] || classIcon.Unknown} title={player.className} />
+          <IconBox
+            src={specIcon[player.spec] || specIcon.Unknown}
+            title={`${player.spec} ${player.className}`}
+          />
+        </div>
+      </td>
+
+      <td className="px-5 py-3">
+        <div className={`font-semibold ${nameClass(player.className)}`}>{player.name}</div>
+        <div className="text-xs text-zinc-500">
+          {player.race} {player.spec} {player.className}
+        </div>
+      </td>
+
+      <td className={`px-5 py-3 font-semibold ${factionRealmClass(player.faction)}`}>
+        {player.realm}
+      </td>
+
+      <td className="px-5 py-3 whitespace-nowrap">
+        <span className="text-green-400">{player.wins}</span>
+        <span className="text-zinc-500"> / </span>
+        <span className="text-red-400">{player.losses}</span>
+        {mode === "activity" && player.gamesDelta > 0 && (
+          <span className="ml-2 text-xs text-zinc-500">+{player.gamesDelta}g</span>
+        )}
+      </td>
+
+      <td className="px-5 py-3 font-semibold whitespace-nowrap">
+        {player.rating}{" "}
+        {mode === "activity" && (
+          <span className={deltaClass(player.ratingDelta)}>
+            {player.ratingDelta > 0 ? `+${player.ratingDelta}` : player.ratingDelta}
+          </span>
+        )}
+      </td>
+
+      <td className={`px-5 py-3 font-semibold whitespace-nowrap ${trackedClass(player.trackedMinutesAgo, mode)}`}>
+        <div>
+          {player.trackedMinutesAgo === null
+            ? mode === "activity"
+              ? "no activity"
+              : "not seen"
+            : `${player.trackedMinutesAgo} minutes ago`}
+        </div>
+
+        {mode === "activity" ? (
+          <div className="text-xs uppercase tracking-wide text-zinc-500">
+            {statusBadge(player.activityStatus)}
+          </div>
+        ) : (
+          <div className="text-xs uppercase tracking-wide text-zinc-500">LAST SCANNED</div>
+        )}
+      </td>
+
+      <td className="relative px-5 py-3">
+        {mode === "activity" ? (
+          <>
+            <div className="inline-flex cursor-default items-center gap-2 rounded-full border border-green-900 bg-green-950 px-3 py-1 text-xs text-green-300">
+              likely team
+            </div>
+
+            <div className="pointer-events-none absolute right-5 top-10 z-20 hidden w-80 rounded-2xl border border-zinc-700 bg-zinc-950 p-4 text-sm shadow-2xl group-hover:block">
+              <div className="mb-2 font-bold text-white">Likely queuing together</div>
+
+              <div className="space-y-1 text-zinc-300">
+                {player.team.map((name: string) => (
+                  <div key={name} className="flex items-center justify-between">
+                    <span>{name}</span>
+                    <span className="text-zinc-500">{player.bracket}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-zinc-800 pt-3 text-xs">
+                <div className="rounded-xl bg-zinc-900 p-2">
+                  <div className="text-zinc-500">Session</div>
+                  <div className="font-bold text-white">{player.session}</div>
+                </div>
+
+                <div className="rounded-xl bg-zinc-900 p-2">
+                  <div className="text-zinc-500">Delta</div>
+                  <div className={deltaClass(player.ratingDelta)}>
+                    {player.ratingDelta > 0 ? `+${player.ratingDelta}` : player.ratingDelta}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-zinc-900 p-2">
+                  <div className="text-zinc-500">Confidence</div>
+                  <div className="font-bold text-white">{player.teamConfidence}%</div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <span className="text-xs text-zinc-500">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+export default function Leaderboard() {
+  const [mode, setMode] = useState<Mode>("ladder");
+  const [bracket, setBracket] = useState<Bracket>("3v3");
+  const [minRating, setMinRating] = useState(2100);
+  const [query, setQuery] = useState("");
+  const [players, setPlayers] = useState<(ActivityPlayer & any)[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    setLoading(true);
+
+    const params = new URLSearchParams({
+      bracket,
+      mode,
+      minRating: String(minRating),
+      q: query,
+    });
+
+    const res = await fetch(`/api/activity?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+    setPlayers(data.items || []);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, [mode, bracket, minRating]);
+
+  const shown = useMemo(() => {
+    if (!query) return players;
+
+    const q = query.toLowerCase();
+
+    return players.filter((p) =>
+      `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [players, query]);
+
+  const hot = shown.filter((p) => p.activityStatus === "hot").length;
+  const active = shown.filter((p) => p.activityStatus === "active").length + hot;
+
+  return (
+    <div className="min-h-screen bg-black p-6 text-zinc-100">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight">
+              <span className="text-orange-500">TBC CLASSIC ANNIVERSARY</span>{" "}
+              {mode === "activity" ? "ACTIVITY" : "LADDER"}
+            </h1>
+
+            <p className="mt-2 text-sm text-zinc-400">
+              US Season 1 {mode === "activity" ? "activity tracker" : "arena ladder"} for 2100+ 2v2, 3v3, and 5v5.
+            </p>
+          </div>
+
+          <button
+            onClick={load}
+            className="rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-900"
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+        </header>
+
+        <div className="mb-5 grid grid-cols-2 gap-3">
+          {(["ladder", "activity"] as Mode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`rounded-md px-4 py-4 text-xl font-black uppercase transition ${
+                mode === m
+                  ? "bg-orange-600 text-white"
+                  : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+
+        {mode === "activity" && (
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
+              <div className="text-xs uppercase text-zinc-500">Hot last 5 min</div>
+              <div className="text-2xl font-black text-orange-400">{hot}</div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
+              <div className="text-xs uppercase text-zinc-500">Active last 15 min</div>
+              <div className="text-2xl font-black text-green-400">{active}</div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-900 bg-zinc-950 p-4">
+              <div className="text-xs uppercase text-zinc-500">Showing</div>
+              <div className="text-2xl font-black text-white">{shown.length}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-5 grid grid-cols-3 gap-3 border-b border-green-800 pb-5">
+          {(["2v2", "3v3", "5v5"] as Bracket[]).map((b) => (
+            <button
+              key={b}
+              onClick={() => setBracket(b)}
+              className={`rounded-md px-4 py-3 text-lg font-black transition ${
+                bracket === b
+                  ? "bg-green-800 text-white"
+                  : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && load()}
+            placeholder="Search player, realm, race, class, spec..."
+            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700 md:col-span-2"
+          />
+
+          <input
+            type="number"
+            value={minRating}
+            onChange={(e) => setMinRating(Number(e.target.value) || 0)}
+            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 outline-none focus:border-green-700"
+          />
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-zinc-900 bg-zinc-950 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-zinc-900 px-5 py-4">
+            <div className="font-bold">SHOWING {shown.length}</div>
+            <div className="text-sm text-zinc-400">
+              {mode === "activity" ? "Activity = actual rating or W/L change" : "Ladder = current ranked list"}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-black text-xs uppercase text-zinc-500">
+                <tr>
+                  <th className="px-5 py-3">Rank</th>
+                  <th className="px-5 py-3">Details</th>
+                  <th className="px-5 py-3">Name</th>
+                  <th className="px-5 py-3">Realm</th>
+                  <th className="px-5 py-3">Won / Lost</th>
+                  <th className="px-5 py-3">Rating</th>
+                  <th className="px-5 py-3">{mode === "activity" ? "Tracked" : "Scanned"}</th>
+                  <th className="px-5 py-3">Team</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {shown.map((p) => (
+                  <PlayerRow key={p.bracket + p.playerId} player={p} mode={mode} />
+                ))}
+
+                {!loading && shown.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-10 text-center text-zinc-500">
+                      {mode === "activity"
+                        ? "No recent activity yet. Activity appears after a later poll detects rating or W/L changes."
+                        : "No ladder data yet. Run the poll endpoint after setting env vars."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-zinc-900 bg-zinc-950 p-5 text-sm text-zinc-400">
+          Ladder shows the current Blizzard API ladder. Activity only shows players who had a rating, win, or loss change after a poll.
+        </div>
+      </div>
+    </div>
+  );
+}

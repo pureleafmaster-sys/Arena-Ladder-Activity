@@ -17,11 +17,17 @@ export async function GET(req: Request) {
   const minRating = Number(url.searchParams.get("minRating") || getMinRating());
   const q = (url.searchParams.get("q") || "").toLowerCase();
 
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const pageSize = Math.min(100, Math.max(25, Number(url.searchParams.get("pageSize") || 100)));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   const supabase = getSupabaseAdmin();
 
   let query = supabase
     .from("latest_activity")
-    .select(`
+    .select(
+      `
       *,
       players:player_id (
         id,
@@ -33,20 +39,23 @@ export async function GET(req: Request) {
         class_name,
         spec
       )
-    `)
+    `,
+      { count: "exact" }
+    )
     .eq("bracket", bracket)
     .gte("rating", minRating);
 
   if (mode === "activity") {
-    query = query.not("last_active_at", "is", null).order("last_active_at", {
-      ascending: false,
-      nullsFirst: false,
-    });
+    // Activity means an actual detected change, not just scanned.
+    query = query
+      .not("last_active_at", "is", null)
+      .gt("games_delta", 0)
+      .order("last_active_at", { ascending: false, nullsFirst: false });
   } else {
     query = query.order("rating", { ascending: false });
   }
 
-  const { data, error } = await query.limit(500);
+  const { data, error, count } = await query.range(from, to);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -55,7 +64,6 @@ export async function GET(req: Request) {
 
     const seenMinutes = minutesAgo(x.last_seen_at);
     const activeMinutes = minutesAgo(x.last_active_at);
-
     const trackedMinutes = mode === "activity" ? activeMinutes : seenMinutes;
 
     return {
@@ -95,5 +103,12 @@ export async function GET(req: Request) {
       )
     : items;
 
-  return NextResponse.json({ items: filtered, count: filtered.length, mode });
+  return NextResponse.json({
+    items: filtered,
+    count: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+    mode,
+  });
 }

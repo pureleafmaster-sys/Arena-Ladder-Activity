@@ -6,6 +6,23 @@ import type { ActivityPlayer, Bracket } from "@/lib/types";
 
 type Mode = "ladder" | "activity";
 
+const titleIcon: Record<string, string> = {
+  rank1: "https://wow.zamimg.com/images/wow/icons/large/achievement_arena_2v2_7.jpg",
+  gladiator: "https://wow.zamimg.com/images/wow/icons/large/achievement_arena_2v2_6.jpg",
+  duelist: "https://wow.zamimg.com/images/wow/icons/large/achievement_arena_2v2_5.jpg",
+  rival: "https://wow.zamimg.com/images/wow/icons/large/achievement_arena_2v2_4.jpg",
+  challenger: "https://wow.zamimg.com/images/wow/icons/large/achievement_arena_2v2_3.jpg",
+};
+
+function titleColor(tier: string) {
+  if (tier === "rank1") return "text-yellow-300";
+  if (tier === "gladiator") return "text-purple-300";
+  if (tier === "duelist") return "text-cyan-300";
+  if (tier === "rival") return "text-blue-300";
+  if (tier === "challenger") return "text-green-300";
+  return "text-orange-400";
+}
+
 function deltaClass(value: number) {
   if (value > 0) return "text-green-400";
   if (value < 0) return "text-red-500";
@@ -99,15 +116,13 @@ function RecordDelta({ winsDelta, lossesDelta }: { winsDelta: number; lossesDelt
 function RankDelta({ value }: { value: number }) {
   if (!value) return null;
 
-  const improved = value < 0;
-
   return (
     <span
       className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${
-        improved ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
+        value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
       }`}
     >
-      {improved ? `▲${Math.abs(value)}` : `▼${value}`}
+      {value > 0 ? `▲${value}` : `▼${Math.abs(value)}`}
     </span>
   );
 }
@@ -138,35 +153,17 @@ function Pager({
 }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <button
-        onClick={() => setPage(1)}
-        disabled={page <= 1}
-        className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30"
-      >
+      <button onClick={() => setPage(1)} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">
         {"<<"}
       </button>
-      <button
-        onClick={() => setPage(Math.max(1, page - 1))}
-        disabled={page <= 1}
-        className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30"
-      >
+      <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">
         {"<"}
       </button>
-      <span className="px-2 font-semibold">
-        Page {page} of {totalPages}
-      </span>
-      <button
-        onClick={() => setPage(Math.min(totalPages, page + 1))}
-        disabled={page >= totalPages}
-        className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30"
-      >
+      <span className="px-2 font-semibold">Page {page} of {totalPages}</span>
+      <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">
         {">"}
       </button>
-      <button
-        onClick={() => setPage(totalPages)}
-        disabled={page >= totalPages}
-        className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30"
-      >
+      <button onClick={() => setPage(totalPages)} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">
         {">>"}
       </button>
     </div>
@@ -176,7 +173,15 @@ function Pager({
 function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode }) {
   return (
     <tr className="group border-b border-zinc-900 hover:bg-zinc-900">
-      <td className="px-3 py-1.5 font-bold text-orange-400 whitespace-nowrap">
+      <td className="px-3 py-1.5">
+        {player.titleTier && player.titleTier !== "none" ? (
+          <IconBox src={titleIcon[player.titleTier]} title={player.title || ""} />
+        ) : (
+          <span className="text-zinc-700">—</span>
+        )}
+      </td>
+
+      <td className={`px-3 py-1.5 font-bold whitespace-nowrap ${titleColor(player.titleTier)}`}>
         #{player.rank ?? "-"}
         <RankDelta value={player.rankDelta || 0} />
       </td>
@@ -233,6 +238,7 @@ export default function Leaderboard() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const [cutoffs, setCutoffs] = useState<any>(null);
   const pageSize = 100;
 
   async function load(nextPage = page) {
@@ -247,14 +253,13 @@ export default function Leaderboard() {
       pageSize: String(pageSize),
     });
 
-    const res = await fetch(`/api/activity?${params.toString()}`, {
-      cache: "no-store",
-    });
-
+    const res = await fetch(`/api/activity?${params.toString()}`, { cache: "no-store" });
     const data = await res.json();
+
     setPlayers(data.items || []);
     setTotalPages(data.totalPages || 1);
     setRefreshedAt(data.refreshedAt || null);
+    setCutoffs(data.cutoffs || null);
     setLoading(false);
   }
 
@@ -286,17 +291,17 @@ export default function Leaderboard() {
             </p>
 
             <p className="mt-1 text-xs text-zinc-500">
-              Data refreshed at{" "}
-              <span className="font-semibold text-zinc-300">
-                {formatEstTimestamp(refreshedAt, { blankIfNull: true })}
-              </span>
+              Data refreshed at <span className="font-semibold text-zinc-300">{formatEstTimestamp(refreshedAt, { blankIfNull: true })}</span>
             </p>
+
+            {cutoffs && (
+              <p className="mt-1 text-xs text-zinc-500">
+                Cutoffs: R1 #{cutoffs.rank_one_cutoff} · Glad #{cutoffs.gladiator_cutoff} · Duelist #{cutoffs.duelist_cutoff} · Rival #{cutoffs.rival_cutoff}
+              </p>
+            )}
           </div>
 
-          <button
-            onClick={() => load(page)}
-            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
-          >
+          <button onClick={() => load(page)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900">
             {loading ? "Refreshing..." : "Refresh"}
           </button>
         </header>
@@ -307,9 +312,7 @@ export default function Leaderboard() {
               key={m}
               onClick={() => setMode(m)}
               className={`rounded px-4 py-3 text-lg font-black uppercase transition ${
-                mode === m
-                  ? "bg-orange-600 text-white"
-                  : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                mode === m ? "bg-orange-600 text-white" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
               }`}
             >
               {m}
@@ -324,9 +327,7 @@ export default function Leaderboard() {
                 key={b}
                 onClick={() => setBracket(b)}
                 className={`rounded px-4 py-2 text-base font-black transition ${
-                  bracket === b
-                    ? "bg-green-800 text-white"
-                    : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                  bracket === b ? "bg-green-800 text-white" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
                 }`}
               >
                 {b}
@@ -342,7 +343,7 @@ export default function Leaderboard() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && load(1)}
-            placeholder="Search player, realm, race, class, spec..."
+            placeholder="Search player, realm, race, class, spec, title..."
             className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-green-700"
           />
 
@@ -356,13 +357,9 @@ export default function Leaderboard() {
 
         <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-950 shadow-2xl">
           <div className="flex items-center justify-between border-b border-zinc-900 px-3 py-2">
-            <div className="font-bold">
-              SHOWING {shown.length} / PAGE {page}
-            </div>
+            <div className="font-bold">SHOWING {shown.length} / PAGE {page}</div>
             <div className="text-xs text-zinc-400">
-              {mode === "activity"
-                ? "Activity = rating or W/L changed in previous 12h, sorted by rating"
-                : "Ladder = current ranked list"}
+              {mode === "activity" ? "Activity = rating or W/L changed in previous 12h, sorted by rating" : "Ladder = current ranked list"}
             </div>
           </div>
 
@@ -370,6 +367,7 @@ export default function Leaderboard() {
             <table className="w-full text-left text-xs">
               <thead className="bg-black text-[11px] uppercase text-zinc-500">
                 <tr>
+                  <th className="px-3 py-2">Title</th>
                   <th className="px-3 py-2">Rank</th>
                   <th className="px-3 py-2">Icons</th>
                   <th className="px-3 py-2">Name</th>
@@ -382,14 +380,14 @@ export default function Leaderboard() {
 
               <tbody>
                 {shown.map((p) => (
-                  <PlayerRow key={p.bracket + p.playerId} player={p} mode={mode} />
+                  <PlayerRow key={p.bracket + p.playerId + p.lastDetectedAt} player={p} mode={mode} />
                 ))}
 
                 {!loading && shown.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-zinc-500">
+                    <td colSpan={8} className="px-5 py-10 text-center text-zinc-500">
                       {mode === "activity"
-                        ? "No recent activity yet. Activity appears after a later poll detects rating or W/L changes."
+                        ? "No recent activity yet. Activity appears after a poll detects rating or W/L changes."
                         : "No ladder data yet. Run the poll endpoint after setting env vars."}
                     </td>
                   </tr>

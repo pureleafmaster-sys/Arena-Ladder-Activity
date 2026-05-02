@@ -15,6 +15,10 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function cutoff(total: number, pct: number) {
+  return Math.max(1, Math.floor(total * pct));
+}
+
 export async function pollBracket(seasonId: string, bracket: string) {
   const supabase = getSupabaseAdmin();
   const pollId = randomUUID();
@@ -22,7 +26,21 @@ export async function pollBracket(seasonId: string, bracket: string) {
   const now = new Date().toISOString();
 
   const data = await getPvpLeaderboard(seasonId, bracket);
-  const rows = parseLeaderboardRows(data).filter((x: any) => x.rating >= minRating);
+  const allRows = parseLeaderboardRows(data);
+  const rows = allRows.filter((x: any) => x.rating >= minRating);
+
+  const totalEntries = allRows.length;
+
+  await supabase.from("title_cutoffs").upsert({
+    bracket,
+    total_entries: totalEntries,
+    rank_one_cutoff: cutoff(totalEntries, 0.001),
+    gladiator_cutoff: cutoff(totalEntries, 0.005),
+    duelist_cutoff: cutoff(totalEntries, 0.03),
+    rival_cutoff: cutoff(totalEntries, 0.10),
+    challenger_cutoff: cutoff(totalEntries, 0.35),
+    updated_at: now,
+  });
 
   const playerIds = rows.map((row: any) => row.id || `${row.realmSlug}-${row.name}`.toLowerCase());
 
@@ -56,12 +74,14 @@ export async function pollBracket(seasonId: string, bracket: string) {
     const winsDelta = latest ? row.wins - latest.wins : 0;
     const lossesDelta = latest ? row.losses - latest.losses : 0;
     const gamesDelta = winsDelta + lossesDelta;
-    const active = Boolean(latest && (ratingDelta || winsDelta || lossesDelta));
 
+    // Positive rankDelta means the player improved upward, e.g. rank 10 -> rank 5 = +5.
+    const rankDelta = latest?.rank ? latest.rank - row.rank : 0;
+
+    const active = Boolean(latest && (ratingDelta || winsDelta || lossesDelta || rankDelta));
     const lastActiveAt = active ? now : latest?.last_active_at || null;
     const status = activityStatusFromMinutes(minutesAgo(lastActiveAt));
 
-    // Do NOT overwrite good profile data here. Only insert identity defaults.
     playersUpsert.push({
       id: playerId,
       name: row.name,
@@ -75,6 +95,7 @@ export async function pollBracket(seasonId: string, bracket: string) {
       bracket,
       player_id: playerId,
       rank: row.rank,
+      rank_delta: rankDelta,
       rating: row.rating,
       wins: row.wins,
       losses: row.losses,
@@ -89,6 +110,7 @@ export async function pollBracket(seasonId: string, bracket: string) {
       player_id: playerId,
       bracket,
       rank: row.rank,
+      rank_delta: rankDelta,
       rating: row.rating,
       wins: row.wins,
       losses: row.losses,
@@ -103,11 +125,12 @@ export async function pollBracket(seasonId: string, bracket: string) {
     });
 
     if (active) {
-      const event = {
+      activityEvents.push({
         poll_id: pollId,
         bracket,
         player_id: playerId,
         rank: row.rank,
+        rank_delta: rankDelta,
         rating: row.rating,
         wins: row.wins,
         losses: row.losses,
@@ -116,9 +139,7 @@ export async function pollBracket(seasonId: string, bracket: string) {
         losses_delta: lossesDelta,
         games_delta: gamesDelta,
         detected_at: now,
-      };
-
-      activityEvents.push(event);
+      });
 
       changedRows.push({
         player_id: playerId,
@@ -160,7 +181,6 @@ export async function pollBracket(seasonId: string, bracket: string) {
 
   const teams = inferLikelyTeams(changedRows, bracket);
 
-  // Only update teams for changed players, and do it in a small loop.
   for (const [playerId, result] of teams.entries()) {
     await supabase
       .from("latest_activity")
@@ -175,6 +195,7 @@ export async function pollBracket(seasonId: string, bracket: string) {
   return {
     bracket,
     pollId,
+    totalEntries,
     totalTracked: rows.length,
     changed: changedRows.length,
     activityEvents: activityEvents.length,

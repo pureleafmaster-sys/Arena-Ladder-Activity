@@ -46,16 +46,16 @@ export async function GET(req: Request) {
     .gte("rating", minRating);
 
   if (mode === "activity") {
-  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
 
-  query = query
-    .not("last_active_at", "is", null)
-    .gte("last_active_at", twelveHoursAgo)
-    .order("rating", { ascending: false })
-    .order("last_active_at", { ascending: false, nullsFirst: false });
-} else {
-  query = query.order("rating", { ascending: false });
-}
+    query = query
+      .not("last_active_at", "is", null)
+      .gte("last_active_at", twelveHoursAgo)
+      .order("rating", { ascending: false })
+      .order("last_active_at", { ascending: false, nullsFirst: false });
+  } else {
+    query = query.order("rating", { ascending: false });
+  }
 
   const { data, error, count } = await query.range(from, to);
 
@@ -71,7 +71,8 @@ export async function GET(req: Request) {
     return {
       playerId: x.player_id,
       rank: x.rank,
-      rankDelta: 0,
+      // This stays 0 unless you later store previous rank. UI supports it if added.
+      rankDelta: x.rank_delta || 0,
       name: p.name || "Unknown",
       realm: p.realm_name || p.realm_slug || "Unknown",
       realmSlug: p.realm_slug || "",
@@ -90,6 +91,9 @@ export async function GET(req: Request) {
       trackedMinutesAgo: trackedMinutes,
       activeMinutesAgo: activeMinutes,
       seenMinutesAgo: seenMinutes,
+      lastSeenAt: x.last_seen_at,
+      lastActiveAt: x.last_active_at,
+      lastDetectedAt: mode === "activity" ? x.last_active_at : x.last_seen_at,
       team: x.likely_team?.length ? x.likely_team : [p.name].filter(Boolean),
       teamConfidence: x.team_confidence || 0,
       session: x.session_record || "0-0",

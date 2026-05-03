@@ -82,6 +82,7 @@ export async function GET(req: Request) {
       .eq("bracket", bracket)
       .gte("rating", minRating)
       .gte("detected_at", twelveHoursAgo)
+      .or("rating_delta.neq.0,wins_delta.neq.0,losses_delta.neq.0")
       .order("rating", { ascending: false })
       .order("detected_at", { ascending: false })
       .range(from, to);

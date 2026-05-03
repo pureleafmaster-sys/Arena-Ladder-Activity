@@ -81,6 +81,28 @@ function filterItems(items: any[], q: string) {
   );
 }
 
+function dedupeLatestPerPlayer(items: any[]) {
+  const latestByPlayer = new Map<string, any>();
+
+  for (const item of items) {
+    const key = `${item.bracket}:${item.playerId}`;
+    const existing = latestByPlayer.get(key);
+
+    if (
+      !existing ||
+      new Date(item.lastDetectedAt || 0).getTime() >
+        new Date(existing.lastDetectedAt || 0).getTime()
+    ) {
+      latestByPlayer.set(key, item);
+    }
+  }
+
+  return Array.from(latestByPlayer.values()).sort((a, b) => {
+    if ((b.rating || 0) !== (a.rating || 0)) return (b.rating || 0) - (a.rating || 0);
+    return new Date(b.lastDetectedAt || 0).getTime() - new Date(a.lastDetectedAt || 0).getTime();
+  });
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const bracket = url.searchParams.get("bracket") || "3v3";
@@ -90,8 +112,6 @@ export async function GET(req: Request) {
 
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
   const pageSize = Math.min(100, Math.max(25, Number(url.searchParams.get("pageSize") || 100)));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
 
   const supabase = getSupabaseAdmin();
 
@@ -113,7 +133,9 @@ export async function GET(req: Request) {
     // Fresh activity only: last 3 hours.
     const activityWindowStart = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
 
-    const { data, error, count } = await supabase
+    // Pull a larger internal window so we can dedupe before paginating.
+    // Main UI still returns max pageSize rows after dedupe.
+    const { data, error } = await supabase
       .from("activity_events")
       .select(
         `
@@ -128,8 +150,7 @@ export async function GET(req: Request) {
           class_name,
           spec
         )
-      `,
-        { count: "exact" }
+      `
       )
       .eq("bracket", bracket)
       .gte("rating", minRating)
@@ -137,7 +158,7 @@ export async function GET(req: Request) {
       .or("rating_delta.neq.0,wins_delta.neq.0,losses_delta.neq.0")
       .order("rating", { ascending: false })
       .order("detected_at", { ascending: false })
-      .range(from, to);
+      .limit(1000);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -160,19 +181,25 @@ export async function GET(req: Request) {
       };
     });
 
-    const filtered = filterItems(items, q);
+    const filtered = filterItems(dedupeLatestPerPlayer(items), q);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const from = (page - 1) * pageSize;
+    const pageItems = filtered.slice(from, from + pageSize);
 
     return NextResponse.json({
-      items: filtered,
-      count: count || 0,
+      items: pageItems,
+      count: filtered.length,
       page,
       pageSize,
-      totalPages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+      totalPages,
       mode,
       refreshedAt: latestScanRow?.last_seen_at || null,
       cutoffs,
     });
   }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
   const { data, error, count } = await supabase
     .from("latest_activity")

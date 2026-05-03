@@ -4,6 +4,12 @@ import { getSupabaseAdmin } from "./supabase";
 import { getCharacterPvpBracket, parsePvpBracketStats } from "./blizzard";
 import { activityStatusFromMinutes } from "./team-detect";
 
+type RunProfileScanOptions = {
+  bracket?: string;
+  minRating?: number;
+  maxRating?: number;
+};
+
 function minutesAgo(iso: string | null): number | null {
   if (!iso) return null;
   return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -36,13 +42,40 @@ function safeLower(value: string) {
   return String(value || "").toLowerCase();
 }
 
-export async function runProfileScan() {
+function validateBracket(bracket?: string) {
+  if (!bracket) return null;
+  if (!["2v2", "3v3", "5v5"].includes(bracket)) {
+    throw new Error(`Invalid bracket "${bracket}". Use 2v2, 3v3, or 5v5.`);
+  }
+  return bracket;
+}
+
+function validateRatings(minRating?: number, maxRating?: number) {
+  if (minRating !== undefined && (!Number.isFinite(minRating) || minRating < 0)) {
+    throw new Error(`Invalid minRating "${minRating}"`);
+  }
+
+  if (maxRating !== undefined && (!Number.isFinite(maxRating) || maxRating < 0)) {
+    throw new Error(`Invalid maxRating "${maxRating}"`);
+  }
+
+  if (minRating !== undefined && maxRating !== undefined && maxRating < minRating) {
+    throw new Error(`maxRating must be >= minRating`);
+  }
+}
+
+export async function runProfileScan(options: RunProfileScanOptions = {}) {
+  const selectedBracket = validateBracket(options.bracket);
+  validateRatings(options.minRating, options.maxRating);
+
   const supabase = getSupabaseAdmin();
   const pollId = randomUUID();
   const now = new Date().toISOString();
   const limit = Number(optionalEnv("PROFILE_SCAN_LIMIT", "75"));
 
-  const { data: dueRows, error } = await supabase
+  const minRating = options.minRating ?? 2100;
+
+  let query = supabase
     .from("latest_activity")
     .select(`
       *,
@@ -57,10 +90,20 @@ export async function runProfileScan() {
         spec
       )
     `)
-    .gte("rating", 2100)
+    .gte("rating", minRating)
     .or(`profile_next_scan_at.is.null,profile_next_scan_at.lte.${now}`)
     .order("rating", { ascending: false })
     .limit(limit);
+
+  if (options.maxRating !== undefined) {
+    query = query.lte("rating", options.maxRating);
+  }
+
+  if (selectedBracket) {
+    query = query.eq("bracket", selectedBracket);
+  }
+
+  const { data: dueRows, error } = await query;
 
   if (error) throw error;
 
@@ -85,7 +128,6 @@ export async function runProfileScan() {
 
       const stats = parsePvpBracketStats(bracketData);
 
-      // If the profile endpoint returns no useful stats, do not overwrite good data.
       if (!stats.rating && !stats.wins && !stats.losses) {
         failed.push({ playerId, bracket, name: player.name, reason: "empty_stats" });
 
@@ -119,7 +161,6 @@ export async function runProfileScan() {
           (ratingDelta !== 0 || winsDelta !== 0 || lossesDelta !== 0)
       );
 
-      // Always update the profile snapshot after comparison.
       await supabase.from("profile_pvp_snapshots").upsert({
         player_id: playerId,
         bracket,
@@ -132,8 +173,6 @@ export async function runProfileScan() {
 
       const lastActiveAt = isChanged ? now : row.last_active_at || null;
 
-      // Critical fix:
-      // If unchanged, reset displayed deltas to 0 so stale +12 / +4W spam disappears.
       await supabase
         .from("latest_activity")
         .update({
@@ -169,7 +208,6 @@ export async function runProfileScan() {
           detected_at: now,
         };
 
-        // Upsert prevents duplicate exact same snapshots if a retry happens.
         const { error: activityError } = await supabase
           .from("activity_events")
           .upsert(activityEvent, {
@@ -234,6 +272,9 @@ export async function runProfileScan() {
 
   return {
     ok: true,
+    bracket: selectedBracket || "all",
+    minRating,
+    maxRating: options.maxRating ?? null,
     pollId,
     due: dueRows?.length || 0,
     scanned: scanned.length,

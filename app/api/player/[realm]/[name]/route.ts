@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { getCharacterEquipment, parseEquipment } from "@/lib/blizzard";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,46 @@ function titleFromRank(rank: number | null, cutoffs: any) {
   }
 
   return { title: "", tier: "none" };
+}
+
+async function fetchAndCacheGear(supabase: any, player: any) {
+  try {
+    const equipment = await getCharacterEquipment(player.realm_slug, player.name);
+    const parsed = parseEquipment(equipment);
+
+    await supabase.from("gear_snapshots").upsert({
+      player_id: player.id,
+      equipment: parsed.gear,
+      average_item_level: parsed.averageItemLevel,
+      equipped_item_level: parsed.equippedItemLevel,
+      fetched_at: new Date().toISOString(),
+      source: "blizzard-equipment",
+    });
+
+    return {
+      gear: parsed.gear,
+      averageItemLevel: parsed.averageItemLevel,
+      equippedItemLevel: parsed.equippedItemLevel,
+      fetchedAt: new Date().toISOString(),
+      source: "live",
+      error: null,
+    };
+  } catch (e: any) {
+    const { data: cached } = await supabase
+      .from("gear_snapshots")
+      .select("*")
+      .eq("player_id", player.id)
+      .maybeSingle();
+
+    return {
+      gear: cached?.equipment || [],
+      averageItemLevel: cached?.average_item_level || null,
+      equippedItemLevel: cached?.equipped_item_level || null,
+      fetchedAt: cached?.fetched_at || null,
+      source: cached ? "cached" : "none",
+      error: e?.message || "Equipment fetch failed",
+    };
+  }
 }
 
 export async function GET(
@@ -104,6 +145,7 @@ export async function GET(
     .from("activity_events")
     .select("*")
     .eq("player_id", player.id)
+    .or("rating_delta.neq.0,wins_delta.neq.0,losses_delta.neq.0")
     .order("detected_at", { ascending: false })
     .limit(100);
 
@@ -116,6 +158,8 @@ export async function GET(
     .select("*")
     .eq("player_id", player.id)
     .order("last_scanned_at", { ascending: false });
+
+  const gear = await fetchAndCacheGear(supabase, player);
 
   return NextResponse.json({
     player: {
@@ -133,5 +177,6 @@ export async function GET(
     brackets,
     events: events || [],
     snapshots: snapshots || [],
+    gear,
   });
 }

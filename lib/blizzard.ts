@@ -45,7 +45,6 @@ export async function blizzardGet(path: string) {
   const token = await getBlizzardToken();
 
   const url = new URL(`https://${region}.api.blizzard.com${path}`);
-
   if (!url.searchParams.has("namespace")) url.searchParams.set("namespace", namespace);
   if (!url.searchParams.has("locale")) url.searchParams.set("locale", locale);
 
@@ -88,9 +87,12 @@ export async function getCharacterSpecializations(realmSlug: string, name: strin
   }
 }
 
+export async function getCharacterPvpBracket(realmSlug: string, name: string, bracket: string) {
+  return blizzardGet(`/profile/wow/character/${realmSlug}/${name.toLowerCase()}/pvp-bracket/${bracket}`);
+}
+
 export function parseProfile(profile: any) {
   const factionName = normalize(profile?.faction);
-
   return {
     faction: factionName === "Alliance" || factionName === "Horde" ? factionName : "Unknown",
     race: normalize(profile?.race),
@@ -168,19 +170,25 @@ export function parseLeaderboardRows(data: any) {
         realmName,
         rank: Number(entry?.rank ?? entry?.ranking ?? 0),
         rating: Number(entry?.rating ?? 0),
-        wins: Number(
-          entry?.season_match_statistics?.won ??
-            entry?.won ??
-            entry?.wins ??
-            0
-        ),
-        losses: Number(
-          entry?.season_match_statistics?.lost ??
-            entry?.lost ??
-            entry?.losses ??
-            0
-        ),
+        wins: Number(entry?.season_match_statistics?.won ?? entry?.won ?? entry?.wins ?? 0),
+        losses: Number(entry?.season_match_statistics?.lost ?? entry?.lost ?? entry?.losses ?? 0),
       };
     })
     .filter((x: any) => x.name && x.realmSlug && x.rating);
+}
+
+export function parsePvpBracketStats(data: any) {
+  const rating = Number(
+    data?.rating ??
+      data?.season_rating ??
+      data?.weekly_rating ??
+      data?.rating_value ??
+      0
+  );
+
+  const season = data?.season_match_statistics || data?.season || data?.statistics || data;
+  const wins = Number(season?.won ?? season?.wins ?? season?.season_won ?? 0);
+  const losses = Number(season?.lost ?? season?.losses ?? season?.season_lost ?? 0);
+
+  return { rating, wins, losses };
 }

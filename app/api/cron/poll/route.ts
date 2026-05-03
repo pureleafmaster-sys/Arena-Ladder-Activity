@@ -1,75 +1,37 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { getLadder } from "@/lib/blizzard";
+import { NextResponse } from "next/server";
+import { pollBracket } from "@/lib/poller";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const maxDuration = 300;
+export const dynamic = "force-dynamic";
 
-const BRACKETS = ["2v2", "3v3", "5v5"];
+function authorized(req: Request) {
+  const urlSecret = new URL(req.url).searchParams.get("secret");
+  const authHeader = req.headers.get("authorization");
+  const bearerSecret = authHeader?.replace("Bearer ", "");
+  return urlSecret === process.env.CRON_SECRET || bearerSecret === process.env.CRON_SECRET;
+}
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const secret = searchParams.get("secret");
-
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+export async function GET(req: Request) {
+  if (!authorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    const results: any[] = [];
+  const url = new URL(req.url);
+  const seasonId = process.env.BLIZZARD_PVP_SEASON_ID || "1";
+  const bracketParam = url.searchParams.get("bracket");
 
-    for (const bracket of BRACKETS) {
-      const ladder = await getLadder(bracket);
+  const brackets = bracketParam
+    ? [bracketParam]
+    : (process.env.POLL_BRACKETS || "2v2,3v3,5v5")
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
 
-      const pollId = crypto.randomUUID();
+  const results = [];
 
-      let inserted = 0;
-
-      for (const entry of ladder) {
-        const playerId = `${entry.character.name}-${entry.character.realm.slug}`;
-
-        // upsert player
-        await supabase.from("players").upsert({
-          id: playerId,
-          name: entry.character.name,
-          realm_slug: entry.character.realm.slug,
-          realm_name: entry.character.realm.name,
-          updated_at: new Date().toISOString(),
-        });
-
-        // insert ladder snapshot
-        await supabase.from("ladder_entries").insert({
-          poll_id: pollId,
-          bracket,
-          player_id: playerId,
-          rank: entry.rank,
-          rating: entry.rating,
-          wins: entry.season_match_statistics?.won || 0,
-          losses: entry.season_match_statistics?.lost || 0,
-          detected_at: new Date().toISOString(),
-        });
-
-        inserted++;
-      }
-
-      results.push({
-        bracket,
-        pollId,
-        inserted,
-      });
-    }
-
-    return NextResponse.json({
-      ok: true,
-      results,
-    });
-  } catch (e: any) {
-    console.error("poll error", e);
-    return NextResponse.json(
-      { error: "poll failed", details: e.message },
-      { status: 500 }
-    );
+  for (const bracket of brackets) {
+    results.push(await pollBracket(seasonId, bracket));
   }
+
+  return NextResponse.json({ ok: true, results });
 }

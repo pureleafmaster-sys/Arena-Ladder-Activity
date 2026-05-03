@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { classIcon, raceIcon, specIcon } from "@/lib/icons";
 import type { ActivityPlayer, Bracket } from "@/lib/types";
 
@@ -21,12 +23,6 @@ function titleColor(tier: string) {
   if (tier === "rival") return "text-blue-300";
   if (tier === "challenger") return "text-green-300";
   return "text-orange-400";
-}
-
-function deltaClass(value: number) {
-  if (value > 0) return "text-green-400";
-  if (value < 0) return "text-red-500";
-  return "text-zinc-300";
 }
 
 function factionRealmClass(faction: string) {
@@ -91,11 +87,7 @@ function RatingDelta({ value }: { value: number }) {
   if (!value) return null;
 
   return (
-    <span
-      className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-black ${
-        value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
-      }`}
-    >
+    <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-black ${value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
       {value > 0 ? `+${value}` : value}
     </span>
   );
@@ -117,11 +109,7 @@ function RankDelta({ value }: { value: number }) {
   if (!value) return null;
 
   return (
-    <span
-      className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${
-        value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"
-      }`}
-    >
+    <span className={`ml-1 rounded px-1 py-0.5 text-[10px] font-bold ${value > 0 ? "bg-green-950 text-green-400" : "bg-red-950 text-red-400"}`}>
       {value > 0 ? `▲${value}` : `▼${Math.abs(value)}`}
     </span>
   );
@@ -129,48 +117,28 @@ function RankDelta({ value }: { value: number }) {
 
 function IconBox({ src, title }: { src?: string; title: string }) {
   return (
-    <span
-      title={title}
-      className="block h-6 w-6 overflow-hidden rounded border border-zinc-700 bg-zinc-900"
-    >
-      {src ? (
-        <img src={src} alt={title} className="h-full w-full object-cover" />
-      ) : (
-        <span className="grid h-full w-full place-items-center text-[10px] text-zinc-500">?</span>
-      )}
+    <span title={title} className="block h-6 w-6 overflow-hidden rounded border border-zinc-700 bg-zinc-900">
+      {src ? <img src={src} alt={title} className="h-full w-full object-cover" /> : <span className="grid h-full w-full place-items-center text-[10px] text-zinc-500">?</span>}
     </span>
   );
 }
 
-function Pager({
-  page,
-  totalPages,
-  setPage,
-}: {
-  page: number;
-  totalPages: number;
-  setPage: (p: number) => void;
-}) {
+function Pager({ page, totalPages, setPage }: { page: number; totalPages: number; setPage: (p: number) => void }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <button onClick={() => setPage(1)} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">
-        {"<<"}
-      </button>
-      <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">
-        {"<"}
-      </button>
+      <button onClick={() => setPage(1)} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">{"<<"}</button>
+      <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} className="rounded border border-zinc-700 px-2 py-1 disabled:opacity-30">{"<"}</button>
       <span className="px-2 font-semibold">Page {page} of {totalPages}</span>
-      <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">
-        {">"}
-      </button>
-      <button onClick={() => setPage(totalPages)} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">
-        {">>"}
-      </button>
+      <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">{">"}</button>
+      <button onClick={() => setPage(totalPages)} disabled={page >= totalPages} className="rounded border border-orange-500 px-2 py-1 disabled:opacity-30">{">>"}</button>
     </div>
   );
 }
 
 function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode }) {
+  const realmSlug = player.realmSlug || String(player.realm || "").toLowerCase();
+  const playerUrl = `/player/${encodeURIComponent(realmSlug)}/${encodeURIComponent(player.name)}`;
+
   return (
     <tr className="group border-b border-zinc-900 hover:bg-zinc-900">
       <td className="px-3 py-1.5">
@@ -195,11 +163,11 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
       </td>
 
       <td className="px-3 py-1.5">
-        <div className={`text-sm font-semibold ${nameClass(player.className)}`}>{player.name}</div>
+        <Link href={playerUrl} className={`text-sm font-semibold hover:underline ${nameClass(player.className)}`}>
+          {player.name}
+        </Link>
         <div className="text-[11px] text-zinc-500">
-          {player.className !== "Unknown" || player.race !== "Unknown"
-            ? `${player.race} ${player.spec} ${player.className}`
-            : "Unknown"}
+          {player.className !== "Unknown" || player.race !== "Unknown" ? `${player.race} ${player.spec} ${player.className}` : "Unknown"}
         </div>
       </td>
 
@@ -211,9 +179,7 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
         <span className="text-green-400">{player.wins}</span>
         <span className="text-zinc-500"> - </span>
         <span className="text-red-400">{player.losses}</span>
-        {mode === "activity" && (
-          <RecordDelta winsDelta={player.winsDelta || 0} lossesDelta={player.lossesDelta || 0} />
-        )}
+        {mode === "activity" && <RecordDelta winsDelta={player.winsDelta || 0} lossesDelta={player.lossesDelta || 0} />}
       </td>
 
       <td className="px-3 py-1.5 text-sm font-semibold whitespace-nowrap">
@@ -229,17 +195,73 @@ function PlayerRow({ player, mode }: { player: ActivityPlayer & any; mode: Mode 
 }
 
 export default function Leaderboard() {
-  const [mode, setMode] = useState<Mode>("ladder");
-  const [bracket, setBracket] = useState<Bracket>("3v3");
-  const [minRating, setMinRating] = useState(2100);
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialMode = (searchParams.get("mode") as Mode) || "ladder";
+  const initialBracket = (searchParams.get("bracket") as Bracket) || "3v3";
+  const initialPage = Math.max(1, Number(searchParams.get("page") || 1));
+  const initialMinRating = Number(searchParams.get("minRating") || 2100);
+  const initialQuery = searchParams.get("q") || "";
+
+  const [mode, setModeState] = useState<Mode>(initialMode === "activity" ? "activity" : "ladder");
+  const [bracket, setBracketState] = useState<Bracket>(["2v2", "3v3", "5v5"].includes(initialBracket) ? initialBracket : "3v3");
+  const [minRating, setMinRatingState] = useState(initialMinRating);
+  const [query, setQueryState] = useState(initialQuery);
   const [players, setPlayers] = useState<(ActivityPlayer & any)[]>([]);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const [page, setPageState] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [cutoffs, setCutoffs] = useState<any>(null);
   const pageSize = 100;
+
+  function syncUrl(next: Partial<{ mode: Mode; bracket: Bracket; page: number; minRating: number; q: string }>) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    const merged = {
+      mode,
+      bracket,
+      page,
+      minRating,
+      q: query,
+      ...next,
+    };
+
+    params.set("mode", merged.mode);
+    params.set("bracket", merged.bracket);
+    params.set("page", String(merged.page));
+    params.set("minRating", String(merged.minRating));
+
+    if (merged.q) params.set("q", merged.q);
+    else params.delete("q");
+
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function setMode(next: Mode) {
+    setModeState(next);
+    setPageState(1);
+    syncUrl({ mode: next, page: 1 });
+  }
+
+  function setBracket(next: Bracket) {
+    setBracketState(next);
+    setPageState(1);
+    syncUrl({ bracket: next, page: 1 });
+  }
+
+  function setPage(next: number) {
+    setPageState(next);
+    syncUrl({ page: next });
+  }
+
+  function setMinRating(next: number) {
+    setMinRatingState(next);
+    setPageState(1);
+    syncUrl({ minRating: next, page: 1 });
+  }
 
   async function load(nextPage = page) {
     setLoading(true);
@@ -264,15 +286,9 @@ export default function Leaderboard() {
   }
 
   useEffect(() => {
-    setPage(1);
-    load(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, bracket, minRating]);
-
-  useEffect(() => {
     load(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [mode, bracket, minRating, page]);
 
   const shown = useMemo(() => players, [players]);
 
@@ -341,8 +357,19 @@ export default function Leaderboard() {
         <div className="mb-3 grid gap-2 md:grid-cols-[1fr_140px]">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load(1)}
+            onChange={(e) => setQueryState(e.target.value)}
+            onBlur={() => {
+              setPageState(1);
+              syncUrl({ q: query, page: 1 });
+              load(1);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setPageState(1);
+                syncUrl({ q: query, page: 1 });
+                load(1);
+              }
+            }}
             placeholder="Search player, realm, race, class, spec, title..."
             className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-green-700"
           />
@@ -359,7 +386,7 @@ export default function Leaderboard() {
           <div className="flex items-center justify-between border-b border-zinc-900 px-3 py-2">
             <div className="font-bold">SHOWING {shown.length} / PAGE {page}</div>
             <div className="text-xs text-zinc-400">
-              {mode === "activity" ? "Activity = rating or W/L changed in previous 12h, sorted by rating" : "Ladder = current ranked list"}
+              {mode === "activity" ? "Activity = rating or W/L changed in previous 3h, sorted by rating" : "Ladder = current ranked list"}
             </div>
           </div>
 
@@ -387,7 +414,7 @@ export default function Leaderboard() {
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-zinc-500">
                       {mode === "activity"
-                        ? "No recent activity yet. Activity appears after a poll detects rating or W/L changes."
+                        ? "No recent activity yet. Activity appears after a scan detects rating or W/L changes."
                         : "No ladder data yet. Run the poll endpoint after setting env vars."}
                     </td>
                   </tr>

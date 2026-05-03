@@ -91,6 +91,10 @@ export async function getCharacterPvpBracket(realmSlug: string, name: string, br
   return blizzardGet(`/profile/wow/character/${realmSlug}/${name.toLowerCase()}/pvp-bracket/${bracket}`);
 }
 
+export async function getCharacterEquipment(realmSlug: string, name: string) {
+  return blizzardGet(`/profile/wow/character/${realmSlug}/${name.toLowerCase()}/equipment`);
+}
+
 export function parseProfile(profile: any) {
   const factionName = normalize(profile?.faction);
   return {
@@ -191,4 +195,66 @@ export function parsePvpBracketStats(data: any) {
   const losses = Number(season?.lost ?? season?.losses ?? season?.season_lost ?? 0);
 
   return { rating, wins, losses };
+}
+
+function firstDisplayString(values: any[], type: string) {
+  const found = values?.find((x: any) => x?.display_string && String(x?.type || "").toUpperCase() === type);
+  return found?.display_string || null;
+}
+
+function parseEnchant(item: any) {
+  const ench = item?.enchantments || [];
+  return ench
+    .map((x: any) => x?.display_string || x?.enchantment?.name)
+    .filter(Boolean)
+    .join(", ");
+}
+
+function parseSockets(item: any) {
+  const sockets = item?.sockets || [];
+  return sockets.map((s: any) => ({
+    type: s?.socket_type?.name || s?.type?.name || "Socket",
+    item: s?.item?.name || s?.display_string || "",
+  }));
+}
+
+export function parseEquipment(data: any) {
+  const equippedItems = data?.equipped_items || [];
+
+  const gear = equippedItems.map((item: any) => {
+    const slot = item?.slot?.name || item?.slot?.type || "Unknown";
+    const quality = item?.quality?.type || item?.quality?.name || "COMMON";
+    const itemId = item?.item?.id || item?.id || null;
+    const icon =
+      item?.media?.assets?.find((a: any) => a?.key === "icon")?.value ||
+      item?.media?.assets?.[0]?.value ||
+      null;
+
+    return {
+      slot,
+      slotType: item?.slot?.type || slot,
+      name: item?.name || item?.item?.name || "Unknown",
+      itemId,
+      itemLevel: item?.level?.value || item?.level || null,
+      requiredLevel: item?.required_level || null,
+      quality,
+      inventoryType: item?.inventory_type?.name || "",
+      binding: item?.binding?.name || "",
+      armor: firstDisplayString(item?.stats || [], "ARMOR") || item?.armor?.display?.display_string || null,
+      stats: (item?.stats || [])
+        .map((s: any) => s?.display?.display_string || s?.display_string)
+        .filter(Boolean),
+      enchant: parseEnchant(item),
+      sockets: parseSockets(item),
+      durability: item?.durability?.display_string || null,
+      icon,
+    };
+  });
+
+  return {
+    averageItemLevel: data?.average_item_level || null,
+    equippedItemLevel: data?.equipped_item_level || null,
+    gear,
+    raw: data,
+  };
 }

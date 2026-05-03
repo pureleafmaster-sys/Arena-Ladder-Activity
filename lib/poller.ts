@@ -78,7 +78,7 @@ export async function pollBracket(seasonId: string, bracket: string) {
     // Positive rankDelta means the player improved upward, e.g. rank 10 -> rank 5 = +5.
     const rankDelta = latest?.rank ? latest.rank - row.rank : 0;
 
-    const active = Boolean(latest && (ratingDelta || winsDelta || lossesDelta || rankDelta));
+    const active = Boolean(latest && (ratingDelta || winsDelta || lossesDelta));
     const lastActiveAt = active ? now : latest?.last_active_at || null;
     const status = activityStatusFromMinutes(minutesAgo(lastActiveAt));
 

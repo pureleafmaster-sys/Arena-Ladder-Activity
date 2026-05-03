@@ -13,11 +13,25 @@ function minutesAgo(iso: string | null): number | null {
 function titleFromRank(rank: number | null, cutoffs: any) {
   if (!rank || !cutoffs) return { title: "", tier: "none" };
 
-  if (rank <= cutoffs.rank_one_cutoff) return { title: "Rank 1", tier: "rank1" };
-  if (rank <= cutoffs.gladiator_cutoff) return { title: "Gladiator", tier: "gladiator" };
-  if (rank <= cutoffs.duelist_cutoff) return { title: "Duelist", tier: "duelist" };
-  if (rank <= cutoffs.rival_cutoff) return { title: "Rival", tier: "rival" };
-  if (rank <= cutoffs.challenger_cutoff) return { title: "Challenger", tier: "challenger" };
+  if (cutoffs.rank_one_cutoff && rank <= cutoffs.rank_one_cutoff) {
+    return { title: "Infernal Gladiator", tier: "rank1" };
+  }
+
+  if (cutoffs.gladiator_cutoff && rank <= cutoffs.gladiator_cutoff) {
+    return { title: "Gladiator", tier: "gladiator" };
+  }
+
+  if (cutoffs.duelist_cutoff && rank <= cutoffs.duelist_cutoff) {
+    return { title: "Duelist", tier: "duelist" };
+  }
+
+  if (cutoffs.rival_cutoff && rank <= cutoffs.rival_cutoff) {
+    return { title: "Rival", tier: "rival" };
+  }
+
+  if (cutoffs.challenger_cutoff && rank <= cutoffs.challenger_cutoff) {
+    return { title: "Challenger", tier: "challenger" };
+  }
 
   return { title: "", tier: "none" };
 }
@@ -26,8 +40,45 @@ function capRealm(value: string) {
   if (!value) return value;
   return value
     .split(/[-\s]/)
-    .map((part) => part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part)
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : part))
     .join(value.includes("-") ? "-" : " ");
+}
+
+function mapCommonPlayer(x: any, p: any, cutoffs: any) {
+  const title = titleFromRank(x.rank, cutoffs);
+
+  return {
+    playerId: x.player_id,
+    rank: x.rank,
+    rankDelta: x.rank_delta || 0,
+    title: title.title,
+    titleTier: title.tier,
+    name: p.name || "Unknown",
+    realm: capRealm(p.realm_name || p.realm_slug || "Unknown"),
+    realmSlug: p.realm_slug || "",
+    faction: p.faction || "Unknown",
+    race: p.race || "Unknown",
+    className: p.class_name || "Unknown",
+    spec: p.spec || "Unknown",
+    bracket: x.bracket,
+    wins: x.wins,
+    losses: x.losses,
+    rating: x.rating,
+    ratingDelta: x.rating_delta || 0,
+    winsDelta: x.wins_delta || 0,
+    lossesDelta: x.losses_delta || 0,
+    gamesDelta: x.games_delta || 0,
+  };
+}
+
+function filterItems(items: any[], q: string) {
+  if (!q) return items;
+
+  return items.filter((p: any) =>
+    `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec} ${p.title}`
+      .toLowerCase()
+      .includes(q)
+  );
 }
 
 export async function GET(req: Request) {
@@ -92,29 +143,9 @@ export async function GET(req: Request) {
     const items = (data || []).map((x: any) => {
       const p = x.players || {};
       const activeMinutes = minutesAgo(x.detected_at);
-      const title = titleFromRank(x.rank, cutoffs);
 
       return {
-        playerId: x.player_id,
-        rank: x.rank,
-        rankDelta: x.rank_delta || 0,
-        title: title.title,
-        titleTier: title.tier,
-        name: p.name || "Unknown",
-        realm: capRealm(p.realm_name || p.realm_slug || "Unknown"),
-        realmSlug: p.realm_slug || "",
-        faction: p.faction || "Unknown",
-        race: p.race || "Unknown",
-        className: p.class_name || "Unknown",
-        spec: p.spec || "Unknown",
-        bracket: x.bracket,
-        wins: x.wins,
-        losses: x.losses,
-        rating: x.rating,
-        ratingDelta: x.rating_delta || 0,
-        winsDelta: x.wins_delta || 0,
-        lossesDelta: x.losses_delta || 0,
-        gamesDelta: x.games_delta || 0,
+        ...mapCommonPlayer(x, p, cutoffs),
         trackedMinutesAgo: activeMinutes,
         activeMinutesAgo: activeMinutes,
         seenMinutesAgo: null,
@@ -128,13 +159,7 @@ export async function GET(req: Request) {
       };
     });
 
-    const filtered = q
-      ? items.filter((p: any) =>
-          `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec} ${p.title}`
-            .toLowerCase()
-            .includes(q)
-        )
-      : items;
+    const filtered = filterItems(items, q);
 
     return NextResponse.json({
       items: filtered,
@@ -176,29 +201,9 @@ export async function GET(req: Request) {
   const items = (data || []).map((x: any) => {
     const p = x.players || {};
     const seenMinutes = minutesAgo(x.last_seen_at);
-    const title = titleFromRank(x.rank, cutoffs);
 
     return {
-      playerId: x.player_id,
-      rank: x.rank,
-      rankDelta: x.rank_delta || 0,
-      title: title.title,
-      titleTier: title.tier,
-      name: p.name || "Unknown",
-      realm: capRealm(p.realm_name || p.realm_slug || "Unknown"),
-      realmSlug: p.realm_slug || "",
-      faction: p.faction || "Unknown",
-      race: p.race || "Unknown",
-      className: p.class_name || "Unknown",
-      spec: p.spec || "Unknown",
-      bracket: x.bracket,
-      wins: x.wins,
-      losses: x.losses,
-      rating: x.rating,
-      ratingDelta: x.rating_delta || 0,
-      winsDelta: x.wins_delta || 0,
-      lossesDelta: x.losses_delta || 0,
-      gamesDelta: x.games_delta || 0,
+      ...mapCommonPlayer(x, p, cutoffs),
       trackedMinutesAgo: null,
       activeMinutesAgo: null,
       seenMinutesAgo: seenMinutes,
@@ -212,13 +217,7 @@ export async function GET(req: Request) {
     };
   });
 
-  const filtered = q
-    ? items.filter((p: any) =>
-        `${p.name} ${p.realm} ${p.faction} ${p.race} ${p.className} ${p.spec} ${p.title}`
-          .toLowerCase()
-          .includes(q)
-      )
-    : items;
+  const filtered = filterItems(items, q);
 
   return NextResponse.json({
     items: filtered,
